@@ -10,7 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from states import UserProfile, FoodLogState, WaterLogState, ActivityLogState
-from utils import calculate_water_goal, calculate_calorie_goal, get_weather, get_food_info
+from utils import calculate_water_goal, calculate_calorie_goal, get_weather, get_food_info, get_random_tasty_recipe
 import asyncio
 
 router = Router()
@@ -48,6 +48,7 @@ def create_main_menu_keyboard():
             [KeyboardButton(text="🍴 Добавить прием пищи")],
             [KeyboardButton(text="💧 Добавить воду")],
             [KeyboardButton(text="🏋️ Добавить тренировку")],
+            [KeyboardButton(text="🍽️ Полезный рецепт")],  
             [KeyboardButton(text="📊 Текущий прогресс")],
             [KeyboardButton(text="📈 Графики прогресса")],
         ],
@@ -358,6 +359,17 @@ async def process_activity_duration(message: Message, state: FSMContext):
         await state.clear()
     except ValueError:
         await message.reply("Пожалуйста, введите корректное значение (в минутах).")
+
+@router.message(F.text == "🍽️ Полезный рецепт")
+async def send_random_recipe(message: Message):
+    await message.answer("Ищу для вас рецепт, пожалуйста, подождите...")
+
+    try:
+        recipe_text = await get_random_tasty_recipe()
+        await message.answer(recipe_text)
+    except Exception as e:
+        await message.answer("Не удалось получить рецепт. Попробуйте позже.")
+        print(f"Ошибка получения рецепта: {e}")
 
 
 @router.message(F.text == "📊 Текущий прогресс")

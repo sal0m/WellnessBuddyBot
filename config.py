@@ -14,3 +14,13 @@ API_KEY = os.getenv("API_KEY")
 
 if not API_KEY:
     raise ValueError("Переменная окружения API_KEY не установлена!")
+
+API_KEY_TASTY = os.getenv("API_KEY_TASTY")
+
+if not API_KEY_TASTY:
+    raise ValueError("Переменная окружения API_KEY_TASTY не установлена!")
+
+API_HOST = os.getenv("API_HOST")
+
+if not API_HOST:
+    raise ValueError("Переменная окружения API_HOST не установлена!")
