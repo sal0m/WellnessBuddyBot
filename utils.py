@@ -2,6 +2,7 @@ import aiohttp
 import requests
 from config import API_KEY
 
+
 async def get_weather(city):
     url = f"http://api.weatherapi.com/v1/current.json?key={API_KEY}&q={city}"
     async with aiohttp.ClientSession() as session:
@@ -9,7 +10,8 @@ async def get_weather(city):
             if response.status == 200:
                 data = await response.json()
                 return data["current"]["temp_c"]
-    return 20  #если вдруг не удалось вернуть температуру, вернем 20 градусов
+    return 20  # если вдруг не удалось вернуть температуру, вернем 20 градусов
+
 
 def get_food_info(product_name):
     url = f"https://world.openfoodfacts.org/cgi/search.pl?action=process&search_terms={product_name}&json=true"
@@ -25,12 +27,13 @@ def get_food_info(product_name):
             }
     return None
 
+
 def calculate_water_goal(weight, activity, temperature):
     base = weight * 30
     extra_activity = (activity // 30) * 500
     extra_temp = 500 if temperature > 25 else 0
     return base + extra_activity + extra_temp
 
+
 def calculate_calorie_goal(weight, height, age, activity):
     return 10 * weight + 6.25 * height - 5 * age + activity * 5
-

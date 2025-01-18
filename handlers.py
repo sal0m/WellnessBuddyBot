@@ -25,17 +25,17 @@ WORKOUT_CALORIES = {
     "Ролики": 200,
 }
 
-# Клавиатура для команды /set_profile
+
 def create_profile_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="/set_profile")],
+            [KeyboardButton(text="Настроить профиль пользователя")],
         ],
         resize_keyboard=True,
         is_persistent=True
     )
 
-# Основная клавиатура с действиями
+
 def create_main_menu_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -48,9 +48,11 @@ def create_main_menu_keyboard():
         is_persistent=True
     )
 
+
 def get_user_profile(user_id: int):
     """Возвращает профиль пользователя или None, если профиль не заполнен."""
     return users.get(user_id)
+
 
 async def ensure_profile(message: Message):
     """Проверяет, настроен ли профиль пользователя. Возвращает True, если да."""
@@ -62,7 +64,7 @@ async def ensure_profile(message: Message):
         return False
     return True
 
-# Команда /start
+
 @router.message(Command("start"))
 async def cmd_start(message: Message):
     user = get_user_profile(message.from_user.id)
@@ -70,15 +72,16 @@ async def cmd_start(message: Message):
         await message.reply("Добро пожаловать обратно! Выберите действие:", reply_markup=create_main_menu_keyboard())
     else:
         await message.reply(
-            "Добро пожаловать! Пожалуйста, настройте профиль с помощью команды /set_profile.",
+            "Добро пожаловать! Для начала работы с ботом настройте свой профиль.",
             reply_markup=create_profile_keyboard()
         )
 
-# Команда /set_profile
+
 @router.message(Command("set_profile"))
 async def set_profile(message: Message, state: FSMContext):
     await message.reply("Введите ваш вес (в кг):")
     await state.set_state(UserProfile.weight)
+
 
 @router.message(UserProfile.weight)
 async def process_weight(message: Message, state: FSMContext):
@@ -92,6 +95,7 @@ async def process_weight(message: Message, state: FSMContext):
     except ValueError:
         await message.reply("Пожалуйста, введите корректное значение веса (в кг).")
 
+
 @router.message(UserProfile.height)
 async def process_height(message: Message, state: FSMContext):
     try:
@@ -103,6 +107,7 @@ async def process_height(message: Message, state: FSMContext):
         await state.set_state(UserProfile.age)
     except ValueError:
         await message.reply("Пожалуйста, введите корректное значение роста (в см).")
+
 
 @router.message(UserProfile.age)
 async def process_age(message: Message, state: FSMContext):
@@ -116,17 +121,20 @@ async def process_age(message: Message, state: FSMContext):
     except ValueError:
         await message.reply("Пожалуйста, введите корректное значение возраста.")
 
+
 @router.message(UserProfile.activity)
 async def process_activity(message: Message, state: FSMContext):
     try:
         activity = int(message.text)
         if activity < 0:
-            raise ValueError("Количество минут активности не может быть отрицательным.")
+            raise ValueError(
+                "Количество минут активности не может быть отрицательным.")
         await state.update_data(activity=activity)
         await message.reply("В каком городе вы находитесь? (на английском)")
         await state.set_state(UserProfile.city)
     except ValueError:
         await message.reply("Пожалуйста, введите корректное значение активности (в минутах).")
+
 
 @router.message(UserProfile.city)
 async def process_city(message: Message, state: FSMContext):
@@ -160,7 +168,7 @@ async def process_city(message: Message, state: FSMContext):
     )
     await state.clear()
 
-# Обработчик: Добавить воду
+
 @router.message(F.text == "💧 Добавить воду")
 async def add_water(message: Message, state: FSMContext):
     if not await ensure_profile(message):
@@ -168,12 +176,14 @@ async def add_water(message: Message, state: FSMContext):
     await message.reply("Введите количество воды (в мл):")
     await state.set_state(WaterLogState.amount)
 
+
 @router.message(WaterLogState.amount)
 async def process_water(message: Message, state: FSMContext):
     try:
         amount = int(message.text)
         if amount <= 0:
-            raise ValueError("Количество воды должно быть положительным числом.")
+            raise ValueError(
+                "Количество воды должно быть положительным числом.")
         user_id = message.from_user.id
         users[user_id]["logged_water"] += amount
         await message.reply(
@@ -184,7 +194,7 @@ async def process_water(message: Message, state: FSMContext):
     except ValueError:
         await message.reply("Пожалуйста, введите корректное значение (в мл).")
 
-# Обработчик: Добавить прием пищи
+
 @router.message(F.text == "🍴 Добавить прием пищи")
 async def add_food(message: Message, state: FSMContext):
     if not await ensure_profile(message):
@@ -192,7 +202,7 @@ async def add_food(message: Message, state: FSMContext):
     await message.reply("Введите название продукта или блюда:")
     await state.set_state(FoodLogState.waiting_for_food_name)
 
-# Обработчик: Добавить прием пищи
+
 @router.message(F.text == "🍴 Добавить прием пищи")
 async def add_food(message: Message, state: FSMContext):
     if not await ensure_profile(message):
@@ -200,7 +210,7 @@ async def add_food(message: Message, state: FSMContext):
     await message.reply("Введите название продукта или блюда:")
     await state.set_state(FoodLogState.waiting_for_food_name)
 
-# Обработчик: Ввод названия продукта
+
 @router.message(FoodLogState.waiting_for_food_name)
 async def process_food_name(message: Message, state: FSMContext):
     food_name = message.text
@@ -220,7 +230,7 @@ async def process_food_name(message: Message, state: FSMContext):
     )
     await state.set_state(FoodLogState.waiting_for_food_weight)
 
-# Обработчик: Ввод веса продукта
+
 @router.message(FoodLogState.waiting_for_food_weight)
 async def process_food_weight(message: Message, state: FSMContext):
     try:
@@ -249,7 +259,7 @@ async def process_food_weight(message: Message, state: FSMContext):
     except ValueError:
         await message.reply("Пожалуйста, укажите вес продукта в граммах (например, 150).")
 
-# Обработчик: Добавить тренировку
+
 @router.message(F.text == "🏋️ Добавить тренировку")
 async def add_activity(message: Message, state: FSMContext):
     if not await ensure_profile(message):
@@ -264,6 +274,7 @@ async def add_activity(message: Message, state: FSMContext):
     await message.reply("Выберите тип тренировки:", reply_markup=keyboard)
     await state.set_state(ActivityLogState.activity_type)
 
+
 @router.callback_query(ActivityLogState.activity_type)
 async def process_activity_selection(callback: CallbackQuery, state: FSMContext):
     activity = callback.data
@@ -275,12 +286,14 @@ async def process_activity_selection(callback: CallbackQuery, state: FSMContext)
     await callback.message.reply("Введите длительность тренировки (в минутах):")
     await state.set_state(ActivityLogState.duration)
 
+
 @router.message(ActivityLogState.duration)
 async def process_activity_duration(message: Message, state: FSMContext):
     try:
         duration = int(message.text)
         if duration <= 0:
-            raise ValueError("Длительность тренировки должна быть положительной.")
+            raise ValueError(
+                "Длительность тренировки должна быть положительной.")
         data = await state.get_data()
         activity_type = data["activity_type"]
         calories_burned = WORKOUT_CALORIES[activity_type] * (duration / 30)
@@ -289,7 +302,7 @@ async def process_activity_duration(message: Message, state: FSMContext):
         users[user_id]["burned_calories"] += calories_burned
 
         await message.reply(
-            f"Вы добавили тренировку: {activity_type} на {duration} минут. Сожжено {calories_burned:.0f} ккал. "
+            f"Вы добавили тренировку: {activity_type} на {duration} минут.\n Сожжено {calories_burned:.0f} ккал. "
             f"Общий прогресс: сожжено {users[user_id]['burned_calories']:.0f} ккал.",
             reply_markup=create_main_menu_keyboard()
         )
@@ -297,7 +310,7 @@ async def process_activity_duration(message: Message, state: FSMContext):
     except ValueError:
         await message.reply("Пожалуйста, введите корректное значение (в минутах).")
 
-# Обработчик: Текущий прогресс
+
 @router.message(F.text == "📊 Текущий прогресс")
 async def view_progress(message: Message):
     if not await ensure_profile(message):
@@ -313,6 +326,6 @@ async def view_progress(message: Message):
     )
     await message.reply(progress_message, reply_markup=create_main_menu_keyboard())
 
-# Функция для подключения обработчиков
+
 def setup_handlers(dp):
     dp.include_router(router)

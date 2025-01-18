@@ -12,6 +12,7 @@ dp = Dispatcher()
 dp.message.middleware(LoggingMiddleware())
 setup_handlers(dp)
 
+
 async def main():
     print("Бот запущен!")
     await dp.start_polling(bot)
