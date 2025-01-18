@@ -1,11 +1,17 @@
+import matplotlib.pyplot as plt
+from io import BytesIO
+import matplotlib.pyplot as plt
+import io
+from aiogram.types import BufferedInputFile
 from aiogram import Router, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, FSInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from states import UserProfile, FoodLogState, WaterLogState, ActivityLogState
 from utils import calculate_water_goal, calculate_calorie_goal, get_weather, get_food_info
+import asyncio
 
 router = Router()
 
@@ -41,8 +47,9 @@ def create_main_menu_keyboard():
         keyboard=[
             [KeyboardButton(text="🍴 Добавить прием пищи")],
             [KeyboardButton(text="💧 Добавить воду")],
-            [KeyboardButton(text="📊 Текущий прогресс")],
             [KeyboardButton(text="🏋️ Добавить тренировку")],
+            [KeyboardButton(text="📊 Текущий прогресс")],
+            [KeyboardButton(text="📈 Графики прогресса")],
         ],
         resize_keyboard=True,
         is_persistent=True
@@ -168,6 +175,48 @@ async def process_city(message: Message, state: FSMContext):
     )
     await state.clear()
 
+
+@router.message(F.text == "📈 Графики прогресса")
+async def handle_graph_request(message: Message):
+    await send_progress_graphs(message)
+
+
+@router.message(Command("progress_graphs"))
+async def send_progress_graphs(message: Message):
+    if not await ensure_profile(message):
+        return  
+    
+    user = get_user_profile(message.from_user.id)
+
+    water_logged = user["logged_water"]
+    water_goal = user["water_goal"]
+    calories_logged = user["logged_calories"]
+    calorie_goal = user["calorie_goal"]
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+
+    # График воды
+    axs[0].bar(["Выпито", "Цель"], [water_logged, water_goal], color=["blue", "lightblue"])
+    axs[0].set_title("Прогресс воды")
+    axs[0].set_ylabel("мл")
+    axs[0].set_ylim(0, max(water_goal, water_logged) * 1.2)
+
+    # График калорий
+    axs[1].bar(["Съедено", "Цель"], [calories_logged, calorie_goal], color=["green", "lightgreen"])
+    axs[1].set_title("Прогресс калорий")
+    axs[1].set_ylabel("ккал")
+    axs[1].set_ylim(0, max(calorie_goal, calories_logged) * 1.2)
+
+    fig.suptitle("Ваш прогресс на сегодня", fontsize=16)
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    plt.savefig(buf, format="png")
+    buf.seek(0)
+    plt.close(fig)
+
+    image = BufferedInputFile(buf.read(), filename="progress_graphs.png")
+    await message.answer_photo(image, caption="Ваши графики прогресса 🌟")
 
 @router.message(F.text == "💧 Добавить воду")
 async def add_water(message: Message, state: FSMContext):
