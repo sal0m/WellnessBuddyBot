@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 import matplotlib.pyplot as plt
 import io
+import random
 from aiogram.types import BufferedInputFile
 from aiogram import Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, FSInputFile
@@ -38,7 +39,6 @@ def create_profile_keyboard():
             [KeyboardButton(text="/set_profile")],
         ],
         resize_keyboard=True,
-        is_persistent=True
     )
 
 
@@ -49,6 +49,7 @@ def create_main_menu_keyboard():
             [KeyboardButton(text="💧 Добавить воду")],
             [KeyboardButton(text="🏋️ Добавить тренировку")],
             [KeyboardButton(text="🍽️ Полезный рецепт")],  
+            [KeyboardButton(text="📋 Персональные рекомендации")],
             [KeyboardButton(text="📊 Текущий прогресс")],
             [KeyboardButton(text="📈 Графики прогресса")],
         ],
@@ -362,6 +363,7 @@ async def process_activity_duration(message: Message, state: FSMContext):
 
 @router.message(F.text == "🍽️ Полезный рецепт")
 async def send_random_recipe(message: Message):
+    """Предлагает рандомный полезный рецепт со ссылкой на видео."""
     await message.answer("Ищу для вас рецепт, пожалуйста, подождите...")
 
     try:
@@ -370,6 +372,51 @@ async def send_random_recipe(message: Message):
     except Exception as e:
         await message.answer("Не удалось получить рецепт. Попробуйте позже.")
         print(f"Ошибка получения рецепта: {e}")
+
+@router.message(F.text == "📋 Персональные рекомендации")
+async def send_recommendations(message: Message):
+    """Предлагает рекомендации по продуктам и тренировкам."""
+    if not await ensure_profile(message):
+        return
+
+    user = get_user_profile(message.from_user.id)
+    calories_logged = user.get("logged_calories", 0)
+    calorie_goal = user.get("calorie_goal", 0)
+    calories_burned = user.get("burned_calories", 0)
+
+    low_calorie_foods = [
+        "Овощной салат",
+        "Запеченная куриная грудка",
+        "Творог обезжиренный",
+        "Яблоки",
+        "Морковь"
+    ]
+    food_recommendation = random.choice(low_calorie_foods)
+
+    workouts = list(WORKOUT_CALORIES.keys())
+    workout_recommendation = random.choice(workouts)
+
+    if calories_burned == 0:
+        message_text = (
+            f"💪 Вы сегодня ещё не тренировались. Исправим? "
+            f"Не забудьте залогировать тренировку! Например, {workout_recommendation}."
+        )
+    else:
+        message_text = (
+            f"🎉 Отлично! Вы уже потренировались сегодня и сожгли {calories_burned} ккал. Продолжайте в том же духе!"
+        )
+
+    if calories_logged < calorie_goal:
+        message_text += (
+            f"\n\n🍴 Ваша цель по калориям ещё не достигнута. Рекомендуем попробовать что-то полезное: {food_recommendation}. "
+            f"Или нажмите на кнопку \"🍽️ Полезный рецепт\" для вдохновения!"
+        )
+    elif calories_logged > calorie_goal:
+        message_text += (
+            f"\n\n⚠️ Вы превысили цель по калориям. Попробуйте компенсировать это тренировкой. Например: {workout_recommendation}."
+        )
+
+    await message.reply(message_text)
 
 
 @router.message(F.text == "📊 Текущий прогресс")
