@@ -29,7 +29,7 @@ WORKOUT_CALORIES = {
 def create_profile_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="Настроить профиль пользователя")],
+            [KeyboardButton(text="/set_profile")],
         ],
         resize_keyboard=True,
         is_persistent=True
