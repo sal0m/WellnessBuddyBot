@@ -7,3 +7,14 @@ class UserProfile(StatesGroup):
     activity = State()
     city = State()
     calorie_goal = State()
+
+class FoodLogState(StatesGroup):
+    waiting_for_food_name = State()
+    waiting_for_food_weight = State()
+
+class ActivityLogState(StatesGroup):
+    activity_type = State()
+    duration = State()
+
+class WaterLogState(StatesGroup):
+    amount = State()
