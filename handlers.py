@@ -11,12 +11,15 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from states import UserProfile, FoodLogState, WaterLogState, ActivityLogState
-from utils import calculate_water_goal, calculate_calorie_goal, get_weather, get_food_info, get_random_tasty_recipe
+from utils import calculate_water_goal, calculate_calorie_goal, get_weather, get_food_info, get_random_tasty_recipe, get_food_info_nutritionix
 import asyncio
+from googletrans import Translator
+
 
 router = Router()
 
-# Хранилище пользователей
+translator = Translator()
+
 users = {}
 
 # Словарь калорий для разных типов активности (за 30 минут)
@@ -32,6 +35,15 @@ WORKOUT_CALORIES = {
     "Ролики": 200,
 }
 
+# Словарь с уровнями активности и их коэффициентами
+ACTIVITY_LEVELS = {
+    "сидячий образ жизни": 1.2,
+    "1–3 тренировки в неделю": 1.375,
+    "3–5 тренировок в неделю": 1.55,
+    "6–7 тренировок в неделю": 1.725,
+    "физическая работа": 1.9
+}
+
 
 def create_profile_keyboard():
     return ReplyKeyboardMarkup(
@@ -45,17 +57,15 @@ def create_profile_keyboard():
 def create_main_menu_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🍴 Добавить прием пищи")],
-            [KeyboardButton(text="💧 Добавить воду")],
-            [KeyboardButton(text="🏋️ Добавить тренировку")],
-            [KeyboardButton(text="🍽️ Полезный рецепт")],  
-            [KeyboardButton(text="📋 Персональные рекомендации")],
-            [KeyboardButton(text="📊 Текущий прогресс")],
+            [KeyboardButton(text="🍴 Добавить прием пищи"), KeyboardButton(text="💧 Добавить воду")],
+            [KeyboardButton(text="🏋️ Добавить тренировку"), KeyboardButton(text="🍽️ Полезный рецепт")],
+            [KeyboardButton(text="📋 Персональные рекомендации"), KeyboardButton(text="📊 Текущий прогресс")],
             [KeyboardButton(text="📈 Графики прогресса")],
         ],
         resize_keyboard=True,
         is_persistent=True
     )
+
 
 
 def get_user_profile(user_id: int):
@@ -72,6 +82,11 @@ async def ensure_profile(message: Message):
         )
         return False
     return True
+
+
+async def translate_to_eng(text: str):
+    translated = await translator.translate(text, src='ru', dest='en')
+    return translated.text
 
 
 @router.message(Command("start"))
@@ -125,24 +140,36 @@ async def process_age(message: Message, state: FSMContext):
         if age <= 0:
             raise ValueError("Возраст должен быть положительным числом.")
         await state.update_data(age=age)
-        await message.reply("Сколько минут активности у вас в день?")
+
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text=activity, callback_data=activity)] for activity in ACTIVITY_LEVELS.keys()
+            ]
+        )
+        await message.reply(
+            "Выберите уровень вашей активности:",
+            reply_markup=keyboard
+        )
         await state.set_state(UserProfile.activity)
     except ValueError:
         await message.reply("Пожалуйста, введите корректное значение возраста.")
 
 
-@router.message(UserProfile.activity)
-async def process_activity(message: Message, state: FSMContext):
-    try:
-        activity = int(message.text)
-        if activity < 0:
-            raise ValueError(
-                "Количество минут активности не может быть отрицательным.")
-        await state.update_data(activity=activity)
-        await message.reply("В каком городе вы находитесь? (на английском)")
-        await state.set_state(UserProfile.city)
-    except ValueError:
-        await message.reply("Пожалуйста, введите корректное значение активности (в минутах).")
+@router.callback_query(UserProfile.activity)
+async def process_activity(callback: CallbackQuery, state: FSMContext):
+    selected_activity = callback.data
+    if selected_activity not in ACTIVITY_LEVELS:
+        await callback.answer("Некорректный выбор. Попробуйте снова.")
+        return
+
+    activity_coefficient = ACTIVITY_LEVELS[selected_activity]
+    await state.update_data(activity=activity_coefficient)
+
+    await callback.message.edit_text(
+        f"Вы выбрали: {selected_activity}. Коэффициент активности: {activity_coefficient}."
+    )
+    await callback.message.answer("В каком городе вы находитесь?")
+    await state.set_state(UserProfile.city)
 
 
 @router.message(UserProfile.city)
@@ -254,29 +281,21 @@ async def add_food(message: Message, state: FSMContext):
     await state.set_state(FoodLogState.waiting_for_food_name)
 
 
-@router.message(F.text == "🍴 Добавить прием пищи")
-async def add_food(message: Message, state: FSMContext):
-    if not await ensure_profile(message):
-        return
-    await message.reply("Введите название продукта или блюда:")
-    await state.set_state(FoodLogState.waiting_for_food_name)
-
-
 @router.message(FoodLogState.waiting_for_food_name)
 async def process_food_name(message: Message, state: FSMContext):
     food_name = message.text
 
-    # Получение информации о продукте (без асинхронности)
-    food_info = get_food_info(food_name)
+    food_name_translated = await translate_to_eng(food_name)
+
+    food_info = await get_food_info_nutritionix(food_name_translated)
 
     if not food_info:
         await message.reply("Не удалось найти информацию о продукте. Попробуйте снова.")
         return
 
-    # Сохраняем данные о продукте во временное состояние
     await state.update_data(food_name=food_info["name"], calories_per_100g=food_info["calories"])
     await message.reply(
-        f"🍴 {food_info['name']} содержит {food_info['calories']} ккал на 100 г.\n"
+        f"🍴 {food_name} содержит {food_info['calories']} ккал на 100 г.\n"
         "Сколько грамм вы съели? Укажите число."
     )
     await state.set_state(FoodLogState.waiting_for_food_weight)
@@ -351,10 +370,12 @@ async def process_activity_duration(message: Message, state: FSMContext):
 
         user_id = message.from_user.id
         users[user_id]["burned_calories"] += calories_burned
+        extra_water = round((duration / 30) * 200)
+        users[user_id]["water_goal"] += extra_water
 
         await message.reply(
-            f"Вы добавили тренировку: {activity_type} на {duration} минут.\n Сожжено {calories_burned:.0f} ккал. "
-            f"Общий прогресс: сожжено {users[user_id]['burned_calories']:.0f} ккал.",
+            f"Вы добавили тренировку: {activity_type} на {duration} минут.\n Сожжено {calories_burned:.0f} ккал.\n "
+            f"Дополнительно: выпейте {extra_water} мл воды.",
             reply_markup=create_main_menu_keyboard()
         )
         await state.clear()
@@ -426,11 +447,19 @@ async def view_progress(message: Message):
 
     user_id = message.from_user.id
     user = users[user_id]
+
+    remaining_water = max(user['water_goal'] - user['logged_water'], 0)
+    calorie_balance = user['logged_calories'] - user['burned_calories']
+
     progress_message = (
-        f"Ваш текущий прогресс:\n"
-        f"💧 Вода: {user['logged_water']} / {user['water_goal']} мл\n"
-        f"🍴 Калории: {user['logged_calories']} / {user['calorie_goal']} ккал\n"
-        f"🏋️ Сожжено калорий: {user['burned_calories']:.0f} ккал"
+        f"📊 Прогресс:\n"
+        f"💧 Вода:\n"
+        f"- Выпито: {user['logged_water']} мл из {user['water_goal']} мл.\n"
+        f"- Осталось: {remaining_water} мл.\n\n"
+        f"🍴 Калории:\n"
+        f"- Потреблено: {round(user['logged_calories'])} ккал из {user['calorie_goal']} ккал.\n"
+        f"- Сожжено: {user['burned_calories']:.0f} ккал.\n"
+        f"- Баланс: {calorie_balance:.0f} ккал."
     )
     await message.reply(progress_message, reply_markup=create_main_menu_keyboard())
 

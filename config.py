@@ -24,3 +24,13 @@ API_HOST = os.getenv("API_HOST")
 
 if not API_HOST:
     raise ValueError("Переменная окружения API_HOST не установлена!")
+
+API_KEY_NUTR = os.getenv("API_KEY_NUTR")
+
+if not API_KEY_NUTR:
+    raise ValueError("Переменная окружения API_KEY_NUTR не установлена!")
+
+APP_ID = os.getenv("APP_ID")
+
+if not APP_ID:
+    raise ValueError("Переменная окружения APP_ID не установлена!")

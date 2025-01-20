@@ -2,7 +2,7 @@ import aiohttp
 import httpx
 import requests
 import random
-from config import API_KEY, API_KEY_TASTY, API_HOST
+from config import API_KEY, API_KEY_TASTY, API_HOST, API_KEY_NUTR, APP_ID
 
 
 async def get_weather(city):
@@ -15,19 +15,50 @@ async def get_weather(city):
     return 20  # если вдруг не удалось вернуть температуру, вернем 20 градусов
 
 
-def get_food_info(product_name):
+async def get_food_info(product_name):
     url = f"https://world.openfoodfacts.org/cgi/search.pl?action=process&search_terms={product_name}&json=true"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        products = data.get('products', [])
-        if products:
-            first_product = products[0]
-            return {
-                'name': first_product.get('product_name', 'Неизвестно'),
-                'calories': first_product.get('nutriments', {}).get('energy-kcal_100g', 0)
-            }
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            if response.status == 200:
+                data = await response.json()
+                products = data.get('products', [])
+                if products:
+                    first_product = products[0]
+                    return {
+                        'name': first_product.get('product_name', 'Неизвестно'),
+                        'calories': first_product.get('nutriments', {}).get('energy-kcal_100g', 0)
+                    }
     return None
+
+
+async def get_food_info_nutritionix(product_name):
+    url = 'https://trackapi.nutritionix.com/v2/natural/nutrients'
+
+    headers = {
+        'x-app-id': APP_ID,
+        'x-app-key': API_KEY_NUTR,
+        'Content-Type': 'application/json',
+    }
+
+    data = {
+        "query": product_name,
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=data, headers=headers) as response:
+            if response.status == 200:
+                data = await response.json()
+                if 'foods' in data and len(data['foods']) > 0:
+                    first_product = data['foods'][0]
+                    return {
+                        'name': first_product.get('food_name', 'Неизвестно'),
+                        'calories': first_product.get('nf_calories', 0)
+                    }
+                else:
+                    return None
+            else:
+                print(f"Error {response.status}: {await response.text()}")
+                return None
 
 
 def calculate_water_goal(weight, activity, temperature):
@@ -37,8 +68,8 @@ def calculate_water_goal(weight, activity, temperature):
     return base + extra_activity + extra_temp
 
 
-def calculate_calorie_goal(weight, height, age, activity):
-    return 10 * weight + 6.25 * height - 5 * age + activity * 5
+def calculate_calorie_goal(weight, height, age, activity_level):
+    return (10 * weight + 6.25 * height - 5 * age + 5) * activity_level
 
 
 async def get_random_tasty_recipe():
@@ -66,7 +97,6 @@ async def get_random_tasty_recipe():
             description = recipe.get("description", "Описание отсутствует")
             recipe_url = recipe.get("original_video_url", "Нет видео")
 
-            # Формируем текст рецепта
             text = f"🍴 {title}\n\n{description}\n\n🔗 Видео-рецепт: {recipe_url}"
             return text
         else:
